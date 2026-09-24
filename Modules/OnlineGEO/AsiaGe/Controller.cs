@@ -64,7 +64,11 @@ public class AsiaGeController : BaseOnlineController
                     foreach (ReadOnlySpan<char> row in HtmlSpan.Nodes(html, "div", "class", "movie-item", HtmlSpanTargetType.Exact))
                     {
                         string link = Rx.Match(row, "href=\"https?://[^/]+/([^\"]+\\.html)\"");
-                        string name = Rx.Match(row, "<div class=\"mob-titl-3\">([^<]+)</div>");
+
+                        // Название: прежняя вёрстка (mob-titl-3) или нынешняя (gb-filmisvidi-3,
+                        // после названия год ссылкой «(<a …>2025</a>)» или пустые «()»).
+                        string name = Rx.Match(row, "<div class=\"mob-titl-3\">([^<]+)</div>")
+                            ?? Rx.Match(row, "<div class=\"gb-filmisvidi-3\">\\s*([^<]+?)\\s*(?:\\(<a|\\(\\s*\\)|</div>)");
 
                         if (string.IsNullOrEmpty(link) || string.IsNullOrEmpty(name))
                             continue;
