@@ -53,9 +53,11 @@ public class AsiaGeController : BaseOnlineController
 
         rhubSearchFallback:
 
-            var search = await InvokeCacheResult<EmbedModel>($"asiage:search:{searchTitle}:{year}", TimeSpan.FromHours(4), async e =>
+            // В кэше только данные сайта, без host: host свой у каждого клиента
+            // (http://ip:9118 или https://домен за прокси) и подставляется ниже.
+            var search = await InvokeCacheResult<List<SearchItem>>($"asiage:search:v2:{searchTitle}:{year}", TimeSpan.FromHours(4), async e =>
             {
-                var similars = new SimilarTpl();
+                var results = new List<SearchItem>();
 
                 await httpHydra.GetSpan($"{init.host}/index.php?do=search&subaction=search&search_start=0&full_search=0&story={HttpUtility.UrlEncode(searchTitle)}", html =>
                 {
@@ -67,15 +69,19 @@ public class AsiaGeController : BaseOnlineController
                         if (string.IsNullOrEmpty(link) || string.IsNullOrEmpty(name))
                             continue;
 
-                        string _y = Rx.Match(row, "/year/([0-9]+)/\"") ?? string.Empty;
-                        similars.Append(name, _y, string.Empty, $"{host}/lite/asiage?title={HttpUtility.UrlEncode(title)}&year={year}&serial={serial}&href={HttpUtility.UrlEncode(link)}");
+                        results.Add(new SearchItem()
+                        {
+                            name = name,
+                            year = Rx.Match(row, "/year/([0-9]+)/\"") ?? string.Empty,
+                            href = link
+                        });
                     }
                 });
 
-                if (similars.Length == 0)
+                if (results.Count == 0)
                     return e.Fail("search", refresh_proxy: true);
 
-                return e.Success(new EmbedModel() { similar = similars });
+                return e.Success(results);
             });
 
             if (IsRhubFallback(search))
@@ -85,7 +91,14 @@ public class AsiaGeController : BaseOnlineController
                 return OnError(search.ErrorMsg);
 
             if (string.IsNullOrWhiteSpace(href))
-                return ContentTpl(search.Value.similar);
+            {
+                var stpl = new SimilarTpl(search.Value.Count);
+
+                foreach (var item in search.Value)
+                    stpl.Append(item.name, item.year, string.Empty, $"{host}/lite/asiage?title={HttpUtility.UrlEncode(title)}&year={year}&serial={serial}&href={HttpUtility.UrlEncode(item.href)}");
+
+                return ContentTpl(stpl);
+            }
         }
         #endregion
 
